@@ -12,3 +12,8 @@ Temperature control for brew purposes, meanly during fermentation process
 //            Includes:   BrewFerm_1.0.ino
 //                        BrewTemp.fzz
 //                        BrewTemp.pdf
+//                        Fernentacion_SierraAPANevada.jpg
+//                        IMG_20190919_180437.jpg
+//                        IMG_20190919_180534.jpg
+//                        IMG_20190919_180828.jpg
+//                        IMG_20190919_180837.jpg
