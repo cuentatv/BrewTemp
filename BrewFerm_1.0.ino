@@ -31,7 +31,7 @@
 /****************************************
  * Define Constants
  ****************************************/
-#define TOKEN "A1E-aLPJlJry1wif5xCjpW9fVWY7nkOrRy" // Your Ubidots TOKEN
+#define TOKEN "YYYYYYYYYYYYYYYYYYYYYYY" // Your Ubidots TOKEN
 #define HTTPSERVER "things.ubidots.com"     // Ubidots Educational URL
 
 #define WIFINAME "XXXXXXXXXXX" //Your SSID
