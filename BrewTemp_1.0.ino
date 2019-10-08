@@ -1,6 +1,6 @@
 //# Copyright (c) 2019 Luis Pérez Manzanal.
 //
-//# BrewFerm 1.0
+//# BrewFerm 1.0.1
 //
 //# Author: Luis Pérez Manzanal
 //
@@ -14,7 +14,10 @@
 //####################  C H A N G E     L O G  ####################
 //#################################################################
 //###
-//###   - Version 1.0 (2019/09/17) Description:  -- First version
+//###   - Version 1.0 (2019/09/17)    Description:  -- First version
+//###   - Version 1.0.1 (2019/10/08)  Description:  -- Adjust gap between sensor
+//###                                               -- Better minumum Freezer temp
+//###                                               -- Full PID interval
 //###
 //###
 //###################################################################################
@@ -31,11 +34,11 @@
 /****************************************
  * Define Constants
  ****************************************/
-#define TOKEN "YYYYYYYYYYYYYYYYYYYYYYY" // Your Ubidots TOKEN
+#define TOKEN "YYYYYYYYYYYYYYYYYYYYYYYY" // Your Ubidots TOKEN
 #define HTTPSERVER "things.ubidots.com"     // Ubidots Educational URL
 
-#define WIFINAME "XXXXXXXXXXX" //Your SSID
-#define WIFIPASS "XXXXXXXXXXX" // Your Wifi Pass
+#define WIFINAME "XXXXXXXXXXXXXXXXXX" //Your SSID
+#define WIFIPASS "XXXXXXXXXXXXXXXXXX" // Your Wifi Pass
 
 #define DEVICE_LABEL  "brewtemp1"  // Put here your Ubidots device label
 #define FERMENTER_LABEL "tempferm" // Your variable label
@@ -70,6 +73,7 @@
 #define MIN_LIMIT 0.1     // Minimum Temperature
 #define FREEZER_DIFF 3.2  // Maximum difference between temperature and freezer
 #define MAX_LIMIT 30      // Maximum Temperature
+#define SENSORGAP_FERMCONG 0.37 // Temperature gap between fermentor sensor and freezer
 #define ISPINDEL_TEMPGAP 0.35 // Temperature gap between temperature sensor in relation with ISpindel device
 
 double temp = 10;
@@ -377,6 +381,8 @@ void getTemperature() {
   
   temp = sensor_ferm.getTempCByIndex(0) + ISPINDEL_TEMPGAP;
   cong = sensor_cong.getTempCByIndex(0) + ISPINDEL_TEMPGAP;
+  temp = temp - (SENSORGAP_FERMCONG - temp/80)/2;
+  cong = cong + (SENSORGAP_FERMCONG - cong/80)/2;  
   Serial.print(" ");
   Serial.print(temp);
   Serial.print(" ");
@@ -433,7 +439,7 @@ void setup() {
   digitalWrite(RELAY_CONG, RELAY_OFF);
 
   myPID.setBangBang(10*TEMPOFFSET);
-  myPID.setTimeStep(1000*INTERVAL_SECONDS);
+  myPID.setTimeStep(1000*NUM_INTERVAL*INTERVAL_SECONDS);
 }
 
 void loop() {
@@ -464,7 +470,7 @@ unsigned long currentMillis = millis();
           sendCaleCongState(0);
         }
       }
-      else if( cong < 2*setPoint - temperature - FREEZER_DIFF ) {
+      else if( temperature > setPoint && cong < setPoint - temperature - FREEZER_DIFF ) {
         digitalWrite(RELAY_CONG, RELAY_OFF);            
         timeStamp = millis();
         if( intCount == 0 ) {
