@@ -1,6 +1,6 @@
 //# Copyright (c) 2019 Luis Pérez Manzanal.
 //
-//# BrewFerm 1.0
+//# BrewFerm 1.0.3
 //
 //# Author: Luis Pérez Manzanal
 //
@@ -14,7 +14,14 @@
 //####################  C H A N G E     L O G  ####################
 //#################################################################
 //###
-//###   - Version 1.0 (2019/09/17) Description:  -- First version
+//###   - Version 1.0 (2019/09/17)    Description:  -- First version
+//###   - Version 1.0.1 (2019/10/08)  Description:  -- Adjust gap between sensor
+//###                                               -- Better minumum Freezer temp
+//###                                               -- Full PID interval
+//###   - Version 1.0.2 (2019/10/09)  Description:  -- Improve initialization mechanism
+//###                                               -- Concentration values sent in loop
+//###                                               -- Concentration relay activity in loop
+//###   - Version 1.0.3 (2019/10/09)  Description:  -- Repair minumum Freezer temp
 //###
 //###
 //###################################################################################
@@ -31,11 +38,13 @@
 /****************************************
  * Define Constants
  ****************************************/
-#define TOKEN "YYYYYYYYYYYYYYYYYYYYYYY" // Your Ubidots TOKEN
+#define TOKEN "YYYYYYYYYYYYYYYYYY" // Your Ubidots TOKEN
 #define HTTPSERVER "things.ubidots.com"     // Ubidots Educational URL
 
-#define WIFINAME "XXXXXXXXXXX" //Your SSID
-#define WIFIPASS "XXXXXXXXXXX" // Your Wifi Pass
+#define WIFINAME "XXXXXXXXXXXXXXXXX" //Your SSID
+#define WIFIPASS "XXXXXXXXXXXXXXXX" // Your Wifi Pass
+
+#define VERSION "1.0.2" // BrewTemp version
 
 #define DEVICE_LABEL  "brewtemp1"  // Put here your Ubidots device label
 #define FERMENTER_LABEL "tempferm" // Your variable label
@@ -70,10 +79,13 @@
 #define MIN_LIMIT 0.1     // Minimum Temperature
 #define FREEZER_DIFF 3.2  // Maximum difference between temperature and freezer
 #define MAX_LIMIT 30      // Maximum Temperature
+#define SENSORGAP_FERMCONG 0.37 // Temperature gap between fermentor sensor and freezer
 #define ISPINDEL_TEMPGAP 0.35 // Temperature gap between temperature sensor in relation with ISpindel device
 
 double temp = 10;
 double cong = 10;
+double actTime = 0;
+int state = 0;
 
 boolean onTrackTemp = true;
 boolean resetNeeded = false;
@@ -82,7 +94,7 @@ int resetDirection = 0;
 double previousTimer = 0;
 unsigned long previousMillis = 0;
 unsigned long timeStamp = 0;
-int intCount = 0;
+int intCount = -1;
 
 double temperature = 0;
 double freezer = 0;
@@ -129,6 +141,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         resetNeeded = true;
         resetDirection = 0;
       }
+      Serial.print(" ");
       Serial.print(modeSwitch);
       Serial.print(" ");
       Serial.println(topic);  
@@ -141,6 +154,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         resetNeeded = true;        
         resetDirection = 0;
       }
+      Serial.print(" ");
       Serial.print(tempSet);
       Serial.print(" ");
       Serial.println(topic);   
@@ -153,6 +167,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
         resetNeeded = true;        
         resetDirection = 0;
       }
+      Serial.print(" ");
       Serial.print(offSet);
       Serial.print(" ");
       Serial.println(topic);  
@@ -275,18 +290,15 @@ void mainRun() {
     if( myTimeInterval > 19*INTERVAL_SECONDS/20 ) {
       if( modeSwitch == 1.00 ) {
         previousTimer = INTERVAL_SECONDS*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_ON);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 1;
       }        
       else if( modeSwitch == 2.00 ) {
         previousTimer = 0;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 0;
       }        
       else {
         previousTimer = INTERVAL_SECONDS*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_ON);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 1;
       }        
       outputSent = previousTimer;
       Serial.print(" E1 ");
@@ -294,18 +306,15 @@ void mainRun() {
     else if( (myTimeInterval < 19*INTERVAL_SECONDS/20) && (myTimeInterval > INTERVAL_SECONDS/20) ) {
       if( modeSwitch == 1.00 ) {
         previousTimer = myTimeInterval*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_ON);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 1;
       }        
       else if( modeSwitch == 2.00 ) {
         previousTimer = 0;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 0;
       }        
       else {
         previousTimer = myTimeInterval*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_ON);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 1;
       }        
       outputSent = previousTimer;
       Serial.print(" E2 ");
@@ -313,18 +322,15 @@ void mainRun() {
     else if( myTimeInterval < -19*INTERVAL_SECONDS/20) {
       if( modeSwitch == 1.00 ) {
         previousTimer = 0;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 0;
       }        
       else if( modeSwitch == 2.00 ) {
         previousTimer = INTERVAL_SECONDS*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_ON);
+        state = 2;
       }        
       else {
         previousTimer = INTERVAL_SECONDS*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_ON);
+        state = 2;
       }        
       outputSent = -previousTimer;
       Serial.print(" E3 ");
@@ -332,40 +338,41 @@ void mainRun() {
     else if( (myTimeInterval < -INTERVAL_SECONDS/20) && (myTimeInterval > -19*INTERVAL_SECONDS/20) ) {
       if( modeSwitch == 1.00 ) {
         previousTimer = 0;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_OFF);
+        state = 0;
       }        
       else if( modeSwitch == 2.00 ) {
         previousTimer = -myTimeInterval*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_ON);
+        state = 2;
       }        
       else {
         previousTimer = -myTimeInterval*NUM_INTERVAL*1000;
-        digitalWrite(RELAY_CALE, RELAY_OFF);
-        digitalWrite(RELAY_CONG, RELAY_ON);
+        state = 2;
       }        
       outputSent = -previousTimer;
       Serial.print(" E4 ");
     }
     else {
       previousTimer = 0;
-      digitalWrite(RELAY_CALE, RELAY_OFF);
-      digitalWrite(RELAY_CONG, RELAY_OFF);      
+      state = 0;
       outputSent = previousTimer;
       Serial.print(" E5 ");      
     }
   }
   else {
     previousTimer = 0;
-    digitalWrite(RELAY_CALE, RELAY_OFF);
-    digitalWrite(RELAY_CONG, RELAY_OFF);      
+    state = 0;
     outputSent = previousTimer;
     Serial.print(" E6 ");      
   } 
-  sendCaleCongState(outputSent/1000);
-  Serial.print(" ");
-  Serial.print( outputSent/1000 );
+  actTime = outputSent/1000;
+/*sendCaleCongState(outputSent/1000);
+//  Serial.print(" ");
+//  Serial.print( outputSent/1000 );
+  if( intCount == 0 ) {
+    sendCaleCongState(outputSent/1000);
+    Serial.print(" ");
+    Serial.print( outputSent/1000 );
+  }*/
 
 }
 // ********************************************************
@@ -377,6 +384,8 @@ void getTemperature() {
   
   temp = sensor_ferm.getTempCByIndex(0) + ISPINDEL_TEMPGAP;
   cong = sensor_cong.getTempCByIndex(0) + ISPINDEL_TEMPGAP;
+  temp = temp - (SENSORGAP_FERMCONG - temp/80)/2;
+  cong = cong + (SENSORGAP_FERMCONG - cong/80)/2;  
   Serial.print(" ");
   Serial.print(temp);
   Serial.print(" ");
@@ -416,6 +425,10 @@ void setup() {
   client.ubidotsSetBroker(HTTPSERVER); // Sets the broker properly for the educational account
   client.setDebug(false); // Pass a true or false bool value to activate debug messages
   Serial.begin(115200);
+  Serial.println();
+  Serial.print("BrewTemp version: ");
+  Serial.println(VERSION);
+
   client.wifiConnection(WIFINAME, WIFIPASS);
   client.begin(callback);
   client.ubidotsSubscribe(DEVICE_LABEL, TEMPSET_LABEL); //Insert the dataSource and Variable's Labels
@@ -464,7 +477,7 @@ unsigned long currentMillis = millis();
           sendCaleCongState(0);
         }
       }
-      else if( cong < 2*setPoint - temperature - FREEZER_DIFF ) {
+      else if( temperature > setPoint && cong < 2*setPoint - temperature - FREEZER_DIFF ) {
         digitalWrite(RELAY_CONG, RELAY_OFF);            
         timeStamp = millis();
         if( intCount == 0 ) {
@@ -479,8 +492,35 @@ unsigned long currentMillis = millis();
         }
       } 
       else {
+        if( intCount == -1 ) {
+          mainRun();  
+        }
         if( intCount == 0 ) {
-          mainRun();
+          mainRun(); 
+          myPID.setTimeStep(999*NUM_INTERVAL*INTERVAL_SECONDS);
+          switch ( state ) {
+            case 0 :
+              digitalWrite(RELAY_CALE, RELAY_OFF);
+              digitalWrite(RELAY_CONG, RELAY_OFF);
+              break;
+
+            case 1 :
+              digitalWrite(RELAY_CALE, RELAY_ON);
+              digitalWrite(RELAY_CONG, RELAY_OFF);
+              break;
+
+            case 2 :
+              digitalWrite(RELAY_CALE, RELAY_OFF);
+              digitalWrite(RELAY_CONG, RELAY_ON);
+              break;
+
+            default :
+              digitalWrite(RELAY_CALE, RELAY_OFF);
+              digitalWrite(RELAY_CONG, RELAY_OFF);
+          }         
+          sendCaleCongState(actTime);
+          Serial.print(" ");
+          Serial.print(actTime);
         }
       }
     }
